@@ -12,3 +12,6 @@ target/
 
 # OS
 .DS_Store
+
+# Personal Claude Code rules (shared standards are in AGENTS.md)
+CLAUDE.md
