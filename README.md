@@ -35,7 +35,7 @@ mvn package                               # runnable jar: application/target/app
 
 ### The idea
 
-The **hexagon** is the inside of the application: the business model, the rules, and the components that coordinate planning and simulation. It doesn't know about HTTP, databases, Spring or the Python engine.
+The **hexagon** is the inside of the application: the domain model, the ports, and the services that hold the business rules and coordinate planning and simulation. It doesn't know about HTTP, databases, Spring or the Python engine.
 
 Everything outside, such as the UI, the database and the Simulation Engine, connects to the hexagon through **ports** and **adapters**:
 
@@ -47,26 +47,32 @@ There are two kinds of each:
 | | Input (driving) side | Output (driven) side |
 |---|---|---|
 | Who starts the call | The outside world calls the hexagon | The hexagon calls the outside world |
-| Port | `domain.port.in`: what the backend offers, e.g. `startRun`, `savePlanVersion` | `domain.port.out`: what the backend needs, e.g. `saveRunRecords`, `runSimulation` |
+| Port | `port.in`: what the backend offers, e.g. `startRun`, `savePlanVersion` | `port.out`: what the backend needs, e.g. `saveRunRecords`, `runSimulation` |
 | Implemented by | Services in the `service` module | Adapters in `adapter.outbound` |
 | Called by | Adapters in `adapter.inbound`, e.g. REST controllers | Services in the `service` module |
 | Examples | REST API for the UI, the run worker | Records (PostgreSQL), Simulation Engine client |
 
 ### The dependency rule
 
-All dependencies point **inwards**, towards the domain. The domain depends on nothing, and nothing in the core depends on an adapter.
+All dependencies point **inwards**, towards the domain. The domain depends on nothing, the ports depend only on the domain, and nothing in the core depends on an adapter.
 
 ```
-        service ──────► domain (model + ports) ◄────── adapter
-           ▲                                             ▲
-        config ──────────── runtime scope only ──────────┤
-           ▲                                             │
-      application ───────── runtime scope only ──────────┘
+                      domain        records, POJOs, enums
+                        ▲
+                        │
+                       port         interfaces only
+                      ▲    ▲
+                      │    │
+                service    adapter
+                   ▲          ▲
+                config ───────┤  runtime scope only
+                   ▲          │
+             application ─────┘  runtime scope only
 ```
 
 On the output side this works by **dependency inversion**. A service needs Records, but it doesn't depend on the Records code. Instead:
 
-1. The domain defines an interface such as `SaveRunRecordsPort` in `domain.port.out`.
+1. The `port` module defines an interface such as `SaveRunRecordsPort` in `port.out`.
 2. The service only uses that interface.
 3. The persistence adapter implements the interface.
 4. At runtime, Spring passes the adapter in as the implementation.
@@ -76,7 +82,7 @@ So the database code depends on the core, not the other way round.
 ### Why we structure it this way
 
 - **We can replace technologies.** The database, the simulation engine or the API style can change without touching the business rules.
-- **The core is easy to test.** `domain` and `service` are plain Java, so their tests run in milliseconds with fake ports, without Spring, a database or the Python service.
+- **The core is easy to test.** `domain`, `port` and `service` are plain Java, so their tests run in milliseconds with fake ports, without Spring, a database or the Python service.
 - **The architecture document maps directly onto the code.** Each functional component (Plan Manager, Validator, Orchestrator, Analyser, Records and so on) has one obvious home.
 - **Mistakes are caught by the compiler, not code review.** See the next section.
 
@@ -86,17 +92,30 @@ Each layer is a separate Maven module, so a dependency that breaks the rule fail
 
 | Module | Compile-time dependencies | Spring? | What it can't do |
 |---|---|---|---|
-| `domain` | none | No | Import Spring, adapters or anything else in the project |
-| `service` | `domain` | No | Import Spring or adapter classes |
-| `adapter` | `domain` | Yes | Import services; it goes through ports instead |
-| `config` | `domain`, `service` (plus `adapter` at **runtime** only) | Yes | Reference adapter classes; beans are wired against port interfaces |
+| `domain` | none | No | Import Spring, ports, adapters or anything else in the project |
+| `port` | `domain` | No | Import Spring, services or adapters |
+| `service` | `domain`, `port` | No | Import Spring or adapter classes |
+| `adapter` | `domain`, `port` | Yes | Import services; it goes through ports instead |
+| `config` | `domain`, `port`, `service` (plus `adapter` at **runtime** only) | Yes | Reference adapter classes; beans are wired against port interfaces |
 | `application` | `config` (plus `adapter` at **runtime** only) | Yes | Not applicable; it only starts the app |
 
 **Runtime scope:** `config` and `application` depend on `adapter` with `<scope>runtime</scope>`. The adapters are on the classpath when the app runs, so Spring finds and wires them, but they're absent at compile time, so no code there can import an adapter class.
 
+### What each core module may contain
+
+Maven controls which modules can see each other, but not what kind of type goes in each one. These two rules are conventions that code review must check:
+
+| Module | Allowed | Not allowed |
+|---|---|---|
+| `domain` | `record`s, POJOs (fields, constructors, getters/setters, `equals`/`hashCode`/`toString`) and `enum`s | Business logic, calculations, interfaces, framework annotations (Spring, JPA, Jackson) |
+| `port` | `interface`s only, whose method signatures use `domain` types | Classes, records, enums, default methods containing logic |
+
+Business rules, such as resilience scoring, fairness measures, shortfall detection and deciding when a result is Partial or Flagged, belong in `service`, not `domain`.
+
 ### Design decisions
 
-- **The ports live in `domain`, not `service`.** The adapters need the ports and the application needs the adapters. Putting the ports in the innermost module avoids a circular dependency between Maven modules.
+- **The ports are a separate module, not part of `service`.** The adapters need the ports and the application needs the adapters, so ports inside `service` would create a circular dependency between Maven modules. Keeping them apart from `domain` also separates the data (`domain`) from the contracts (`port`).
+- **`domain` holds data only.** All behaviour lives in `service`, so the model stays simple to create, compare and pass between layers.
 - **All adapters are in one module, split into `adapter.inbound` and `adapter.outbound`.** The names avoid `in` and `out` because `in` is a reserved word in Java.
 - **Services have no Spring annotations.** `config` registers them as `@Bean`s, so the service code stays plain Java.
 - **The main class is in the root package `ie.tcd.resilientcity`,** even though it lives in the `application` module. Spring only scans the main class's package and the ones below it, so this lets it find `config.*` and `adapter.*` automatically.
@@ -107,16 +126,22 @@ Each layer is a separate Maven module, so a dependency that breaks the rule fail
 
 The root package is `ie.tcd.resilientcity`.
 
-### `domain`: the core of the hexagon
+### `domain`: the data model
 
 Package: `ie.tcd.resilientcity.domain`
 
-The planning and simulation model and its business rules: plans and plan versions, scenarios and their inputs, simulation runs with their seeds, run results, evaluations, reviews, and the user roles (Planner, Emergency Services Manager, Auditor). It also holds rules that don't depend on any technology, such as resilience scoring, fairness measures, shortfall detection, and when a result is Partial or Flagged.
+Records, POJOs and enums only. They describe plans and plan versions, scenarios and their inputs, simulation runs with their seeds, run results, evaluations, reviews, and the user roles (Planner, Emergency Services Manager, Auditor). No business logic.
+
+### `port`: the contracts of the hexagon
+
+Package: `ie.tcd.resilientcity.port`
+
+Interfaces only, using `domain` types in their signatures.
 
 | Package | Contents |
 |---|---|
-| `domain.port.in` | **Input ports.** Plan Manager operations (`setScenarioInputs`, `savePlanVersion`, `recordFinalisation`, `saveReview`, `markFlagged`), the Simulation Orchestrator's `startRun`, and the `startAssessment` interface shared by every use-case manager |
-| `domain.port.out` | **Output ports.** Records (`saveRunRecords`, `saveMapData`, `loadMapData`, plan versions, audit log), the run queue, and the Simulation Engine's `runSimulation` |
+| `port.in` | **Input ports.** Plan Manager operations (`setScenarioInputs`, `savePlanVersion`, `recordFinalisation`, `saveReview`, `markFlagged`), the Simulation Orchestrator's `startRun`, and the `startAssessment` interface shared by every use-case manager |
+| `port.out` | **Output ports.** Records (`saveRunRecords`, `saveMapData`, `loadMapData`, plan versions, audit log), the run queue, and the Simulation Engine's `runSimulation` |
 
 The five external services have no ports here because the Simulation Engine calls them, not the backend.
 
@@ -124,7 +149,7 @@ The five external services have no ports here because the Simulation Engine call
 
 Package: `ie.tcd.resilientcity.service`
 
-These classes implement the input ports and coordinate the domain. They reach the outside world only through output ports.
+These classes implement the input ports and contain all the business rules, working on `domain` objects. They reach the outside world only through output ports.
 
 | Component | Responsibility |
 |---|---|
@@ -163,8 +188,9 @@ The `@SpringBootApplication` class and `application.properties`. This module bui
 
 For example, to add a use case:
 
-1. **Domain:** add the model classes and rules. Add an input port for the operation and output ports for anything the use case needs from outside.
-2. **Service:** implement the input port in `service.usecase.<name>`, using only output ports. Unit-test it with fake ports.
-3. **Adapter:** add a controller in `adapter.inbound.web` that calls the input port. Implement any new output ports in `adapter.outbound.*`, annotated with `@Component` or `@Repository`.
-4. **Config:** register the service as a `@Bean`, taking its output ports as parameters.
-5. **Dependencies:** add a library to the module that needs it, at the point you need it.
+1. **Domain:** add the records, POJOs or enums the use case needs. No logic.
+2. **Port:** add an input port interface for the operation in `port.in`, and output port interfaces in `port.out` for anything the use case needs from outside.
+3. **Service:** implement the input port in `service.usecase.<name>`, putting the business rules here and using only output ports. Unit-test it with fake ports.
+4. **Adapter:** add a controller in `adapter.inbound.web` that calls the input port. Implement any new output ports in `adapter.outbound.*`, annotated with `@Component` or `@Repository`.
+5. **Config:** register the service as a `@Bean`, taking its output ports as parameters.
+6. **Dependencies:** add a library to the module that needs it, at the point you need it.

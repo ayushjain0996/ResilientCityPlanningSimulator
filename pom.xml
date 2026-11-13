@@ -20,6 +20,7 @@
 
     <modules>
         <module>domain</module>
+        <module>port</module>
         <module>service</module>
         <module>adapter</module>
         <module>config</module>
@@ -35,6 +36,11 @@
             <dependency>
                 <groupId>ie.tcd.resilientcity</groupId>
                 <artifactId>domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ie.tcd.resilientcity</groupId>
+                <artifactId>port</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

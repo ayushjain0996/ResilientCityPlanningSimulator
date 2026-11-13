@@ -20,6 +20,10 @@
         </dependency>
         <dependency>
             <groupId>ie.tcd.resilientcity</groupId>
+            <artifactId>port</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>ie.tcd.resilientcity</groupId>
             <artifactId>service</artifactId>
         </dependency>
         <dependency>
