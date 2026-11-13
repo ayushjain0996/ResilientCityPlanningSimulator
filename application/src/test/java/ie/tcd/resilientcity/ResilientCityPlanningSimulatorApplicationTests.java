@@ -1,4 +1,4 @@
-package ie.tcd.cs7cs3.simulator;
+package ie.tcd.resilientcity;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

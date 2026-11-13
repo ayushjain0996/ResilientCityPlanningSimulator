@@ -4,7 +4,6 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <!-- Inherit Spring Boot's defaults: dependency versions, plugin config, Java settings -->
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
@@ -12,41 +11,47 @@
         <relativePath/>
     </parent>
 
-    <!-- Project coordinates -->
-    <groupId>ie.tcd.cs7cs3</groupId>
+    <groupId>ie.tcd.resilientcity</groupId>
     <artifactId>resilient-city-planning-simulator</artifactId>
     <version>0.0.1-SNAPSHOT</version>
-    <packaging>jar</packaging>
+    <packaging>pom</packaging>
 
     <name>Resilient City Planning Simulator</name>
-    <description>Resilient City Planning Simulator - CS7CS3 Advanced Software Engineering</description>
+
+    <modules>
+        <module>domain</module>
+        <module>service</module>
+        <module>adapter</module>
+        <module>config</module>
+        <module>application</module>
+    </modules>
 
     <properties>
         <java.version>25</java.version>
     </properties>
 
-    <dependencies>
-        <!-- REST APIs + embedded Tomcat -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- Testing: JUnit 5, Mockito, AssertJ, Spring test support -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <!-- Enables `mvn spring-boot:run` and builds an executable jar -->
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>ie.tcd.resilientcity</groupId>
+                <artifactId>domain</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ie.tcd.resilientcity</groupId>
+                <artifactId>service</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ie.tcd.resilientcity</groupId>
+                <artifactId>adapter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>ie.tcd.resilientcity</groupId>
+                <artifactId>config</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 </project>
