@@ -21,6 +21,8 @@ In the overall system:
 
 Libraries are added when the feature that needs them is implemented, not in advance.
 
+The coding standards for this project, which both developers and AI agents follow, are in [AGENTS.md](AGENTS.md).
+
 ## Build and run
 
 ```bash
@@ -107,7 +109,7 @@ Maven controls which modules can see each other, but not what kind of type goes 
 
 | Module | Allowed | Not allowed |
 |---|---|---|
-| `domain` | `record`s, POJOs (fields, constructors, getters/setters, `equals`/`hashCode`/`toString`) and `enum`s | Business logic, calculations, interfaces, framework annotations (Spring, JPA, Jackson) |
+| `domain` | `record`s, POJOs (fields, constructors, getters/setters, `equals`/`hashCode`/`toString`), `enum`s, compact-constructor checks that reject invalid values, and all of the project's exceptions (in `domain.exception`) | Business logic, calculations, interfaces, framework annotations (Spring, JPA, Jackson) |
 | `port` | `interface`s only, whose method signatures use `domain` types | Classes, records, enums, default methods containing logic |
 
 Business rules, such as resilience scoring, fairness measures, shortfall detection and deciding when a result is Partial or Flagged, belong in `service`, not `domain`.
@@ -131,7 +133,9 @@ The root package is `ie.tcd.resilientcity`.
 
 Package: `ie.tcd.resilientcity.domain`
 
-Records, POJOs and enums only. They describe plans and plan versions, scenarios and their inputs, simulation runs with their seeds, run results, evaluations, reviews, and the user roles (Planner, Emergency Services Manager, Auditor). No business logic.
+Records, POJOs and enums only. They describe plans and plan versions, scenarios and their inputs, simulation runs with their seeds, run results, evaluations, reviews, and the user roles (Planner, Emergency Services Manager, Auditor). No business logic, apart from compact-constructor checks that reject invalid values.
+
+The `domain.exception` package holds every exception class in the project. No other module defines its own exceptions.
 
 ### `port`: the contracts of the hexagon
 
