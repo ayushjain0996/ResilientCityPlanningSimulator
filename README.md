@@ -95,9 +95,9 @@ Each layer is a separate Maven module, so a dependency that breaks the rule fail
 | `domain` | none | No | Import Spring, ports, adapters or anything else in the project |
 | `port` | `domain` | No | Import Spring, services or adapters |
 | `service` | `domain`, `port` | No | Import Spring or adapter classes |
-| `adapter` | `domain`, `port` | Yes | Import services; it goes through ports instead |
-| `config` | `domain`, `port`, `service` (plus `adapter` at **runtime** only) | Yes | Reference adapter classes; beans are wired against port interfaces |
-| `application` | `config` (plus `adapter` at **runtime** only) | Yes | Not applicable; it only starts the app |
+| `adapter` | `domain`, `port` | Spring Framework only (`spring-webmvc`) | Import services; it goes through ports instead |
+| `config` | `domain`, `port`, `service` (plus `adapter` at **runtime** only) | Spring Framework only (`spring-context`) | Reference adapter classes; beans are wired against port interfaces |
+| `application` | `config` (plus `adapter` at **runtime** only) | Spring Boot (`spring-boot-starter-web`) | Not applicable; it only starts the app |
 
 **Runtime scope:** `config` and `application` depend on `adapter` with `<scope>runtime</scope>`. The adapters are on the classpath when the app runs, so Spring finds and wires them, but they're absent at compile time, so no code there can import an adapter class.
 
@@ -117,6 +117,7 @@ Business rules, such as resilience scoring, fairness measures, shortfall detecti
 - **The ports are a separate module, not part of `service`.** The adapters need the ports and the application needs the adapters, so ports inside `service` would create a circular dependency between Maven modules. Keeping them apart from `domain` also separates the data (`domain`) from the contracts (`port`).
 - **`domain` holds data only.** All behaviour lives in `service`, so the model stays simple to create, compare and pass between layers.
 - **All adapters are in one module, split into `adapter.inbound` and `adapter.outbound`.** The names avoid `in` and `out` because `in` is a reserved word in Java.
+- **Only `application` depends on Spring Boot.** `adapter` and `config` use plain Spring Framework libraries (`spring-webmvc`, `spring-context`), so they are ordinary libraries. The Spring Boot starters, which bring auto-configuration and the embedded Tomcat server, belong in `application` only. When a feature needs a new technology, add the plain library (e.g. `spring-data-jpa`) to the module that uses it, and the matching starter (e.g. `spring-boot-starter-data-jpa`) to `application`. This also stops IDE tools such as the Spring Boot Dashboard from listing `adapter` and `config` as runnable apps.
 - **Services have no Spring annotations.** `config` registers them as `@Bean`s, so the service code stays plain Java.
 - **The main class is in the root package `ie.tcd.resilientcity`,** even though it lives in the `application` module. Spring only scans the main class's package and the ones below it, so this lets it find `config.*` and `adapter.*` automatically.
 
@@ -193,4 +194,4 @@ For example, to add a use case:
 3. **Service:** implement the input port in `service.usecase.<name>`, putting the business rules here and using only output ports. Unit-test it with fake ports.
 4. **Adapter:** add a controller in `adapter.inbound.web` that calls the input port. Implement any new output ports in `adapter.outbound.*`, annotated with `@Component` or `@Repository`.
 5. **Config:** register the service as a `@Bean`, taking its output ports as parameters.
-6. **Dependencies:** add a library to the module that needs it, at the point you need it.
+6. **Dependencies:** add a library to the module that needs it, at the point you need it. Use plain Spring Framework libraries in `adapter` and `config`, and put Spring Boot starters in `application` only.
