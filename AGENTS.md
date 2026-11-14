@@ -293,3 +293,54 @@ The project uses test-driven development as part of its eXtreme Programming proc
 - [ ] Tests were written or updated, and `mvn test` passes in `backend/`.
 - [ ] backend/README.md is updated if the structure or conventions changed.
 - [ ] Any `package-info.java` in a package that now has classes has been deleted.
+
+---
+
+# Frontend (`frontend/`)
+
+## 12. Frontend rules (draft for team review)
+
+These rules are a draft. The team reviews and agrees them before they are binding.
+
+### Stack
+
+- React with TypeScript, built with Vite and managed with npm. The Node version is pinned in `frontend/.nvmrc`.
+- Lint with `oxlint` (the Vite template's linter). Test with Vitest and React Testing Library.
+- Don't add a library before the feature that needs it. React Router, the Firebase SDK, a map library, a data-fetching library and Firebase Hosting config each come with their first feature.
+
+### Where code goes
+
+| What you're writing | Folder under `frontend/src/` |
+|---|---|
+| Typed REST client for the backend. The only place that calls `fetch` for `/api` | `api/` |
+| Screens and logic for one area (plans, runs, review, one folder per use case) | `features/<area>/` |
+| Shared UI components | `components/` |
+| Firebase Authentication *(planned)* | `auth/` |
+| Language files *(planned)* | `i18n/` |
+
+### Naming
+
+- Use the architecture document's terms and British spelling: `finalisePlan`, `Analyser`, `utilisation`.
+- Components are `PascalCase` in `PascalCase.tsx` files, one exported component per file. Functions and variables are `camelCase`; constants are `UPPER_SNAKE_CASE`.
+- Request and response types match the backend DTOs: `<Thing>Request` / `<Thing>Response`, with the same `camelCase` field names.
+
+### Behaviour
+
+- The UI calls the backend only through `/api`. Locally the Vite dev server proxies `/api` to `http://localhost:8080`, mirroring Firebase Hosting in production.
+- The UI never calls the external services, except Map Data, which the architecture document has the UI fetch directly.
+- No secrets in frontend code: everything shipped to the browser is public.
+- Partial and Flagged are shown as statuses (for example a badge), never as errors.
+- Starting a simulation is asynchronous: the UI receives a run ID and polls `GET /api/runs/{runId}` for the status.
+- Hiding controls by role is only cosmetic. The backend enforces roles.
+
+### Formatting
+
+- 2-space indent for TypeScript, TSX, CSS, HTML and JSON, as set in `.editorconfig`. Prettier is not used; adding it needs team agreement.
+- No unused imports or variables (`tsc` and `oxlint` reject them).
+
+### Testing
+
+- Test files are `<Component>.test.tsx` (or `<module>.test.ts`) next to the code they test.
+- Name tests as a description of the behaviour, in camelCase, e.g. `showsPartialBadgeWhenMapDataIsMissing`.
+- No real network calls in tests. Mock the `api/` module or `fetch`.
+- `npm run lint`, `npm test` and `npm run build` must pass in `frontend/`.
