@@ -15,3 +15,6 @@ target/
 
 # Personal Claude Code rules (shared standards are in AGENTS.md)
 CLAUDE.md
+
+# Local monorepo plan (not shared)
+plan.md
