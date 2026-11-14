@@ -2,11 +2,36 @@
 
 These are the rules for all code in this repository. They apply to every contributor, human or AI. An AI agent must follow them exactly. If a task seems to need breaking one, stop and ask instead of improvising.
 
-- [README.md](README.md) explains the architecture: what each module is for and why. Read it before changing code.
+- [README.md](README.md) gives an overview of the repository. [backend/README.md](backend/README.md) explains the backend architecture: what each module is for and why. Read it before changing backend code. [frontend/README.md](frontend/README.md) explains how to run and test the UI.
 - This file says how to write code inside that structure.
-- If the two disagree, raise it rather than choosing one.
+- If a README and this file disagree, raise it rather than choosing one.
 
 ---
+
+## Repository-wide rules
+
+The repository is a monorepo:
+
+| Folder | Contents | Rules |
+|---|---|---|
+| `backend/` | Spring Boot backend, a Maven multi-module build | Sections 1 to 11 |
+| `frontend/` | React UI (Vite + TypeScript + npm) | Section 12 |
+| `simulation-engine/` *(planned)* | Python Mesa + FastAPI Simulation Engine | Added when the engine is started |
+
+These rules apply to every folder:
+
+- Formatting basics come from `.editorconfig`: UTF-8, LF line endings, spaces not tabs, no trailing whitespace, one final newline. Keep `.editorconfig` and this file in sync.
+- Never commit secrets, credentials or `.env` files. Only `.env.example` files may be committed.
+- Use the architecture document's terms and **British spelling** everywhere, including the UI code (see section 3).
+- Add a library only in the change that first uses it, in the part of the repository that uses it. Ask the team before adding one that isn't in the architecture document.
+- Each part has its own README for its architecture and commands. Update it in the same change when its structure or conventions change, and update the root README when the layout of the repository changes.
+- Every change must leave the tests passing in each part it touches: `mvn test` in `backend/`, `npm test` in `frontend/`.
+
+---
+
+# Backend (`backend/`)
+
+Sections 1 to 11 apply to the code in `backend/`.
 
 ## 1. Non-negotiable rules
 
@@ -18,7 +43,7 @@ These are the rules for all code in this repository. They apply to every contrib
 4. **`port` contains only interfaces.** No classes, records or enums, and no `default` methods with logic.
 5. **All business rules live in `service`.** It's plain Java: no Spring imports or annotations.
 6. **Only `application` depends on Spring Boot.** `adapter` and `config` use plain Spring Framework libraries.
-7. **Dependencies point inwards.** Never make an inner module depend on an outer one (see the dependency rule in the README).
+7. **Dependencies point inwards.** Never make an inner module depend on an outer one (see the dependency rule in backend/README.md).
 8. **Add a library only in the change that first uses it.** Never add one in advance.
 9. **The backend never calls the five external services** (Map Data, Knowledge Base, Shelter Data, Sensor/Data, Inventory/Staff). Only the Python Simulation Engine does.
 10. **The current time always comes from an injected `java.time.Clock`.** Never call `Instant.now()`, `LocalDateTime.now()` or `System.currentTimeMillis()` directly (see section 5).
@@ -241,13 +266,13 @@ The project uses test-driven development as part of its eXtreme Programming proc
 - Name test methods as a description of the behaviour, in camelCase, e.g. `marksResultPartialWhenMapDataIsMissing`.
 - Use AssertJ (`assertThat`), not JUnit's `assertEquals`.
 - Make tests deterministic: use a fixed `Clock`, fixed seeds, and no real network calls.
-- Every change must leave `mvn test` passing for the whole project.
+- Every change must leave `mvn test` passing for the whole backend (run it in `backend/`).
 
 ---
 
 ## 10. Documentation
 
-- **README.md** is the single place for architecture documentation. Update it in the same change whenever the module structure, package layout or conventions change.
+- **backend/README.md** is the single place for backend architecture documentation. Update it in the same change whenever the module structure, package layout or conventions change.
 - Don't put documentation in POM files: no `<description>` elements and no explanatory comments.
 - Write Javadoc for every `port` interface and its methods. Say which use cases use it (e.g. "Used in UC-01, UC-11"), and match the wording of the architecture document.
 - Comments explain *why*, not *what*. Don't leave commented-out code.
@@ -265,6 +290,6 @@ The project uses test-driven development as part of its eXtreme Programming proc
 - [ ] Current time comes from an injected `Clock`.
 - [ ] No new library was added unless this change uses it; there are no versions in module POMs; any starter is only in `application`.
 - [ ] Partial, seeds, `Clock` and audit rules are followed where relevant (section 5).
-- [ ] Tests were written or updated, and `mvn test` passes.
-- [ ] README.md is updated if the structure or conventions changed.
+- [ ] Tests were written or updated, and `mvn test` passes in `backend/`.
+- [ ] backend/README.md is updated if the structure or conventions changed.
 - [ ] Any `package-info.java` in a package that now has classes has been deleted.
