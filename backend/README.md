@@ -21,9 +21,11 @@ In the overall system:
 
 Libraries are added when the feature that needs them is implemented, not in advance.
 
-The coding standards for this project, which both developers and AI agents follow, are in [AGENTS.md](AGENTS.md).
+The coding standards for this project, which both developers and AI agents follow, are in [AGENTS.md](../AGENTS.md). For an overview of the whole repository, see the [root README](../README.md).
 
 ## Build and run
+
+Run these commands from the `backend/` folder:
 
 ```bash
 mvn test                                  # build all modules and run the tests
