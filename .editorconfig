@@ -1,4 +1,4 @@
-# Formatting rules from AGENTS.md, section 4. Keep the two in sync.
+# Formatting rules from AGENTS.md: section 4 (backend) and section 12 (frontend). Keep them in sync.
 root = true
 
 [*]
@@ -22,6 +22,9 @@ ij_java_names_count_to_use_import_on_demand = 999
 indent_size = 4
 
 [{*.yml,*.yaml,*.json}]
+indent_size = 2
+
+[*.{ts,tsx,js,jsx,css,html}]
 indent_size = 2
 
 [*.properties]

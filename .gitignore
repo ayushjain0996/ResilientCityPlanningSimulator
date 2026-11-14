@@ -1,6 +1,17 @@
+# Java
 target/
 *.class
 *.log
+
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment files (only .env.example is shared)
+.env*
+!.env.example
 
 # IDE
 .idea/
