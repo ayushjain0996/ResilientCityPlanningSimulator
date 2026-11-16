@@ -2,7 +2,7 @@
 
 The React UI of the Resilient City Planning Simulator. It is built with Vite and TypeScript, and in production it is served by Firebase Hosting, which forwards `/api` to the backend.
 
-The coding standards for the frontend are in section 12 of [AGENTS.md](../AGENTS.md). For an overview of the whole repository, see the [root README](../README.md).
+The coding standards for the frontend are in section 12 of [docs/CODING_STANDARDS.md](../docs/CODING_STANDARDS.md). For an overview of the whole repository, see the [root README](../README.md).
 
 ## Requirements
 
