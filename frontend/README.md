@@ -22,6 +22,17 @@ npm run build      # type-check and build into dist/
 npm run preview    # serve the built app locally
 ```
 
+## Source layout
+
+Under `src/`:
+
+| Folder | Contents |
+|---|---|
+| `api/` | Typed client for the backend. The only place that calls `fetch` for `/api` (for example `getHealth()` in `health.ts`) |
+| `features/<area>/` | Screens and logic for one area (for example `features/health/HealthPanel.tsx`, which shows whether the backend is reachable) |
+
+Tests sit next to the code they test. They mock `fetch` or the `api/` module, never the real network.
+
 ## Calling the backend
 
 The UI calls the backend only through relative `/api/...` URLs. The dev server proxies `/api` to `http://localhost:8080` (see `vite.config.ts`), which mirrors Firebase Hosting in production: the UI and the API share one origin, so the backend needs no CORS setup.
