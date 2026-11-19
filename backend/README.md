@@ -173,15 +173,16 @@ Package: `ie.tcd.resilientcity.adapter`
 | Package | Role |
 |---|---|
 | `adapter.inbound.web` | The REST/JSON API that the React UI calls through Firebase Hosting. It exposes the UI's requests (`submitGrowthRequest`, `submitScoringRequest`, `revisePlan`, `finalisePlan`, `submitReview`, …) and the run-status endpoint the UI polls. It also holds the backend part of the **Authenticator**, which checks the Firebase token and the user's role on every request. Controllers call input ports only, never outbound adapters directly |
-| `adapter.inbound.worker` *(planned)* | The run worker. It takes QUEUED runs from the run table and drives them through the Orchestrator |
-| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. The run table also serves as the job queue. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.inbound.worker` | The run worker. It listens to the RabbitMQ `runs` queue, one job at a time (`prefetch=1`), turns each message into a `QueuedRun` and hands it to the `ExecuteRunUseCase` input port |
+| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.outbound.messaging` | Puts runs on the RabbitMQ `runs` queue. `RabbitRunQueueAdapter` implements `RunQueuePort` and sends a JSON `RunMessage` (run ID, scenario ID, seed) |
 | `adapter.outbound.simulation` *(planned)* | The HTTP/JSON client for the Python Simulation Engine |
 
 ### `config`: Spring wiring
 
 Package: `ie.tcd.resilientcity.config`
 
-`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings.
+`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings. `RabbitConfig` declares the durable `runs` queue and the JSON message converter.
 
 ### `application`: entry point
 
