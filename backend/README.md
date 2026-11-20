@@ -33,6 +33,73 @@ mvn spring-boot:run -pl application -am   # start the backend on http://localhos
 mvn package                               # runnable jar: application/target/application-0.0.1-SNAPSHOT.jar
 ```
 
+## Run queue (RabbitMQ)
+
+Simulation runs are handed from the backend to the worker through a RabbitMQ queue called `runs`. This section explains what happens and how to check it on your own computer.
+
+### What it does
+
+Think of a restaurant. The backend is the waiter, the queue is the order rail, and the run worker is the cook.
+
+1. Something creates a run and calls `RunQueuePort.enqueueRun`. `RabbitRunQueueAdapter` (the waiter) writes it as a JSON message, for example `{"runId":"77","scenarioId":"5","seed":99}`, and puts it on the `runs` queue.
+2. RabbitMQ holds the message until the worker is free. The worker takes **one job at a time** (`spring.rabbitmq.listener.simple.prefetch=1`).
+3. `RunWorker` (the cook) receives the message, turns it back into a `QueuedRun` and hands it to `ExecuteRunUseCase`.
+
+Where the code lives:
+
+| Part | Where |
+|---|---|
+| The run (run ID, scenario ID, seed) | `domain`: `QueuedRun`, `RunId`, `ScenarioId`, `Seed` |
+| "Put a run on the queue" | `port.out`: `RunQueuePort`, implemented by `adapter.outbound.messaging.RabbitRunQueueAdapter` |
+| "Execute this run" | `port.in`: `ExecuteRunUseCase` (for now a temporary stand-in in `config.UseCaseConfig` that only logs) |
+| Taking jobs off the queue | `adapter.inbound.worker.RunWorker` |
+| The `runs` queue and the JSON translator | `config.RabbitConfig` |
+| Queue name and RabbitMQ address | `application.properties` (`resilientcity.queue.runs`, `spring.rabbitmq.*`) |
+
+### What I proved: a job can travel the whole route. A run goes on the queue, waits, comes out, and reaches the place where the work will happen. The line Executing QueuedRun[...] is the proof it arrived.
+
+### Check it on your computer
+
+You need JDK 25, Maven, Git and Docker Desktop (running).
+
+1. **Run the tests.** They don't need RabbitMQ.
+   ```bash
+   mvn test
+   ```
+2. **Start RabbitMQ** in Docker. The first run downloads it. Wait about 20 seconds afterwards. If the name is already in use, run `docker start rabbit-demo` instead.
+   ```bash
+   docker run -d --name rabbit-demo -p 5672:5672 -p 15672:15672 rabbitmq:4-management
+   ```
+3. **Build the modules, then start the backend.** The log should show `Created new connection` to `localhost:5672`. That means the worker is connected. Leave it running.
+   ```bash
+   mvn install -DskipTests
+   mvn spring-boot:run -pl application
+   ```
+4. **Send one run by hand.** Open <http://localhost:15672> and log in with `guest` / `guest`. Go to **Queues and Streams**, click **runs**, then open **Publish message**. Set the property `content_type` to `application/json`, use this payload, and click **Publish message**:
+   ```json
+   {"runId":"77","scenarioId":"5","seed":99}
+   ```
+5. **Look at the backend log.** Within a second you should see:
+   ```
+   Executing QueuedRun[runId=RunId[value=77], scenarioId=ScenarioId[value=5], seed=Seed[value=99]]
+   ```
+6. **Clean up.** Press `Ctrl+C` in the backend window, then remove the container:
+   ```bash
+   docker rm -f rabbit-demo
+   ```
+
+If it doesn't work:
+
+| Problem | Likely cause |
+|---|---|
+| `release version 25 not supported` | Maven is using an older Java. Point `JAVA_HOME` at JDK 25 and open a new terminal. |
+| `Cannot connect to the Docker daemon` | Docker Desktop isn't running. |
+| `Port is already allocated` | Another program, often an older RabbitMQ container, is using port 5672 or 15672. |
+| The log shows connection refused | RabbitMQ is still starting. Wait 20 seconds. |
+| Message published but nothing in the log | Check that `content_type` is exactly `application/json`. |
+
+Not yet covered: failed jobs. Retries with a limit and a dead-letter queue are future work.
+
 ---
 
 ## Hexagonal architecture
@@ -173,15 +240,16 @@ Package: `ie.tcd.resilientcity.adapter`
 | Package | Role |
 |---|---|
 | `adapter.inbound.web` | The REST/JSON API that the React UI calls through Firebase Hosting. It exposes the UI's requests (`submitGrowthRequest`, `submitScoringRequest`, `revisePlan`, `finalisePlan`, `submitReview`, …) and the run-status endpoint the UI polls. It also holds the backend part of the **Authenticator**, which checks the Firebase token and the user's role on every request. Controllers call input ports only, never outbound adapters directly |
-| `adapter.inbound.worker` *(planned)* | The run worker. It takes QUEUED runs from the run table and drives them through the Orchestrator |
-| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. The run table also serves as the job queue. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.inbound.worker` | The run worker. It listens to the RabbitMQ `runs` queue, one job at a time (`prefetch=1`), turns each message into a `QueuedRun` and hands it to the `ExecuteRunUseCase` input port |
+| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.outbound.messaging` | Puts runs on the RabbitMQ `runs` queue. `RabbitRunQueueAdapter` implements `RunQueuePort` and sends a JSON `RunMessage` (run ID, scenario ID, seed) |
 | `adapter.outbound.simulation` *(planned)* | The HTTP/JSON client for the Python Simulation Engine |
 
 ### `config`: Spring wiring
 
 Package: `ie.tcd.resilientcity.config`
 
-`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings.
+`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings. `RabbitConfig` declares the durable `runs` queue and the JSON message converter.
 
 ### `application`: entry point
 
