@@ -21,7 +21,7 @@ In the overall system:
 
 Libraries are added when the feature that needs them is implemented, not in advance.
 
-The coding standards for this project, which both developers and AI agents follow, are in [AGENTS.md](../AGENTS.md). For an overview of the whole repository, see the [root README](../README.md).
+The coding standards for this project, which both developers and AI agents follow, are in [docs/CODING_STANDARDS.md](../docs/CODING_STANDARDS.md). For an overview of the whole repository, see the [root README](../README.md).
 
 ## Build and run
 

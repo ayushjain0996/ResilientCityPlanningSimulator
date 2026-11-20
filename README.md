@@ -9,8 +9,14 @@ The Resilient City Planning Simulator, built by CS7CS3 Group 11. This repository
 | `backend/` | Spring Boot modular monolith (Java 25, Maven multi-module, hexagonal architecture) | [backend/README.md](backend/README.md) |
 | `frontend/` | React UI (Vite + TypeScript + npm), served by Firebase Hosting | [frontend/README.md](frontend/README.md) |
 | `simulation-engine/` *(planned)* | Python Simulation Engine (Mesa + FastAPI) | Added when the engine is started |
+| `docs/` | Coding standards, review instructions and the pull request template | See below |
 
-The coding standards for the whole repository, followed by developers and AI agents, are in [AGENTS.md](AGENTS.md).
+## Contributing
+
+- [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md): the coding standards for the whole repository, followed by developers and AI agents.
+- [docs/REVIEW.md](docs/REVIEW.md): how to review a branch, written for AI agents and also usable as a checklist by developers.
+- [docs/PULL_REQUEST_TEMPLATE.md](docs/PULL_REQUEST_TEMPLATE.md): the pull request description. GitHub fills new pull requests with it.
+- [AGENTS.md](AGENTS.md): the entry point for AI agents, pointing to the documents above.
 
 ## How the pieces talk
 
