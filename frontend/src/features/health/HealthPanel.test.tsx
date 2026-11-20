@@ -1,36 +1,35 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getHealth } from '../../api/health'
-import HealthPanel from './HealthPanel'
+import { ApiError, getHealth } from '../../api/health'
+import { HealthPanel } from './HealthPanel'
 
-vi.mock('../../api/health')
+vi.mock('../../api/health', async importOriginal => ({
+  ...await importOriginal<typeof import('../../api/health')>(), getHealth: vi.fn(),
+}))
+
+beforeEach(() => { vi.mocked(getHealth).mockReset() })
 
 describe('HealthPanel', () => {
-  beforeEach(() => {
-    vi.mocked(getHealth).mockReset()
-  })
-
-  it('showsCheckingMessageWhileWaitingForTheBackend', () => {
+  it('showsLoadingAndPreventsDuplicateRequests', () => {
     vi.mocked(getHealth).mockReturnValue(new Promise(() => {}))
-
     render(<HealthPanel />)
-
     expect(screen.getByText('Checking backend...')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Checking...' })).toBeDisabled()
   })
-
-  it('showsTheBackendStatusWhenTheBackendIsUp', async () => {
-    vi.mocked(getHealth).mockResolvedValue({ status: 'UP' })
-
+  it('recoversFromFailureWhenTheUserRetries', async () => {
+    vi.mocked(getHealth).mockRejectedValueOnce(new ApiError('network')).mockResolvedValueOnce({ status: 'UP' })
     render(<HealthPanel />)
-
+    expect(await screen.findByText(/Backend unreachable/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }))
     expect(await screen.findByText('Backend: UP')).toBeInTheDocument()
+    expect(screen.queryByText(/Backend unreachable/)).not.toBeInTheDocument()
   })
-
-  it('showsUnreachableMessageWhenTheBackendCannotBeReached', async () => {
-    vi.mocked(getHealth).mockRejectedValue(new Error('Failed to fetch'))
-
-    render(<HealthPanel />)
-
-    expect(await screen.findByText('Backend unreachable')).toBeInTheDocument()
+  it('cancelsOutstandingRequestsOnUnmount', async () => {
+    vi.mocked(getHealth).mockReturnValue(new Promise(() => {}))
+    const { unmount } = render(<HealthPanel />)
+    await waitFor(() => expect(getHealth).toHaveBeenCalledTimes(1))
+    const signal = vi.mocked(getHealth).mock.calls[0][0]?.signal
+    unmount()
+    expect(signal?.aborted).toBe(true)
   })
 })
