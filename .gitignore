@@ -29,3 +29,10 @@ CLAUDE.md
 
 # Local monorepo plan (not shared)
 plan.md
+
+# Simulator Engine
+simulationEngine/__pycache__/
+
+simulationEngine/cache/
+
+simulationEngine/maps/*.graphml
