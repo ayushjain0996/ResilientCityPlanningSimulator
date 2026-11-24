@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    # The official PostGIS image is published for amd64 only, so pin it to run on every host architecture.
+    platform: linux/amd64
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-resilientcity}
+      POSTGRES_USER: ${POSTGRES_USER:-resilientcity}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-resilientcity}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
