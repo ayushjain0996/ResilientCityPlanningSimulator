@@ -34,10 +34,12 @@ React UI ──/api──▶ Backend ──HTTP/JSON──▶ Python Simulation 
 
 ## Quick start
 
-Backend (Java 25, Maven), from `backend/`:
+Backend (Java 25, Maven, Docker running), from `backend/`:
 
 ```bash
 mvn test
+docker compose up -d --wait               # PostgreSQL + PostGIS on localhost:5432
+mvn spring-boot:run -pl application -am   # http://localhost:8080
 ```
 
 Frontend (Node 22, see `frontend/.nvmrc`), from `frontend/`:

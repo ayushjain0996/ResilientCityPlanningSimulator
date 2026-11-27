@@ -17,7 +17,9 @@ In the overall system:
 | Language | Java 25 |
 | Build | Maven, multi-module |
 | Framework | Spring Boot 4.0 (the parent POM manages the versions of all Spring and test libraries and plugins) |
-| Tests | JUnit 5, AssertJ, Mockito |
+| Database | PostgreSQL 17 with PostGIS, run locally with Docker Compose |
+| Persistence | Spring Data JPA, with Flyway for the schema and the starting data |
+| Tests | JUnit 5, AssertJ, Mockito, Testcontainers |
 
 Libraries are added when the feature that needs them is implemented, not in advance.
 
@@ -25,12 +27,83 @@ The coding standards for this project, which both developers and AI agents follo
 
 ## Build and run
 
+You need Java 25, Maven and Docker. Docker must be running for the tests, which start their own throwaway database, and for the local database that the backend uses.
+
 Run these commands from the `backend/` folder:
 
 ```bash
 mvn test                                  # build all modules and run the tests
+docker compose up -d --wait               # start the local database
 mvn spring-boot:run -pl application -am   # start the backend on http://localhost:8080
 mvn package                               # runnable jar: application/target/application-0.0.1-SNAPSHOT.jar
+```
+
+## Local database
+
+[compose.yaml](compose.yaml) runs PostgreSQL 17 with PostGIS on `localhost:5432`. Run these commands from the `backend/` folder:
+
+```bash
+docker compose up -d --wait                           # start the database and wait until it is ready
+docker compose ps                                     # check its status
+docker compose exec postgres psql -U resilientcity    # open a SQL prompt (\q to leave)
+docker compose down                                   # stop it and keep the data
+docker compose down -v                                # stop it and delete all the data
+```
+
+After `docker compose down -v`, the next start of the backend creates the tables and the starting data again.
+
+The defaults work without any setup. To change them, set these environment variables:
+
+| Variable | Used by | Default |
+|---|---|---|
+| `POSTGRES_DB` | Docker Compose | `resilientcity` |
+| `POSTGRES_USER` | Docker Compose | `resilientcity` |
+| `POSTGRES_PASSWORD` | Docker Compose | `resilientcity` |
+| `DB_URL` | Backend | `jdbc:postgresql://localhost:5432/resilientcity` |
+| `DB_USERNAME` | Backend | `resilientcity` |
+| `DB_PASSWORD` | Backend | `resilientcity` |
+
+If you change a `POSTGRES_*` value, change the matching `DB_*` value too. The `POSTGRES_*` values only take effect when the database is first created, so run `docker compose down -v` before changing them. The defaults are for local development only: a deployed backend must set the `DB_*` variables.
+
+The tests don't use this database. [TestcontainersConfig](application/src/test/java/ie/tcd/resilientcity/TestcontainersConfig.java) starts a separate one from the same image. Change the image in both places.
+
+## Database migrations
+
+Flyway creates the tables and the starting data. The migrations are SQL files in [adapter/src/main/resources/db/migration](adapter/src/main/resources/db/migration), and Flyway runs any new ones, in order, each time the backend starts.
+
+| Migration | What it does |
+|---|---|
+| `V1__create_plans.sql` | Enables PostGIS and creates the `plans` table |
+| `V2__seed_plans.sql` | Adds three starting plans |
+
+- To change the schema or the starting data, add a new file named `V<next number>__<description>.sql`, with two underscores.
+- Never edit a migration that has been merged. Flyway detects the change and the backend refuses to start.
+- Hibernate only checks that the entities match the tables (`spring.jpa.hibernate.ddl-auto=validate`). It never changes the schema.
+
+## Plans API
+
+| Request | Result |
+|---|---|
+| `POST /api/plans` | Creates a plan. `201 Created`, with its address in the `Location` header |
+| `GET /api/plans` | Returns every plan |
+| `GET /api/plans/{planId}` | Returns one plan |
+
+Errors are Problem Details: `400` for an invalid plan name, plan ID or request body, `404` for a plan that doesn't exist, and `503` when the database can't be reached.
+
+With the backend running, in a POSIX shell (macOS, Linux, Git Bash or WSL):
+
+```bash
+curl -i -X POST -H 'Content-Type: application/json' -d '{"name":"Test plan"}' http://localhost:8080/api/plans
+curl http://localhost:8080/api/plans
+curl http://localhost:8080/api/plans/3f2b8c1e-6a4d-4f7b-9c1a-0d5e7b2a1c01
+```
+
+In PowerShell:
+
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/plans -ContentType 'application/json' -Body '{"name":"Test plan"}'
+Invoke-RestMethod http://localhost:8080/api/plans
+Invoke-RestMethod http://localhost:8080/api/plans/3f2b8c1e-6a4d-4f7b-9c1a-0d5e7b2a1c01
 ```
 
 ---
@@ -99,9 +172,9 @@ Each layer is a separate Maven module, so a dependency that breaks the rule fail
 | `domain` | none | No | Import Spring, ports, adapters or anything else in the project |
 | `port` | `domain` | No | Import Spring, services or adapters |
 | `service` | `domain`, `port` | No | Import Spring or adapter classes |
-| `adapter` | `domain`, `port` | Spring Framework only (`spring-webmvc`) | Import services; it goes through ports instead |
+| `adapter` | `domain`, `port` | Plain Spring libraries only (`spring-webmvc`, `spring-data-jpa`) | Import services; it goes through ports instead |
 | `config` | `domain`, `port`, `service` (plus `adapter` at **runtime** only) | Spring Framework only (`spring-context`) | Reference adapter classes; beans are wired against port interfaces |
-| `application` | `config` (plus `adapter` at **runtime** only) | Spring Boot (`spring-boot-starter-web`) | Not applicable; it only starts the app |
+| `application` | `config` (plus `adapter` at **runtime** only) | Spring Boot (`spring-boot-starter-web`, `spring-boot-starter-data-jpa`, `spring-boot-starter-flyway`) | Not applicable; it only starts the app |
 
 **Runtime scope:** `config` and `application` depend on `adapter` with `<scope>runtime</scope>`. The adapters are on the classpath when the app runs, so Spring finds and wires them, but they're absent at compile time, so no code there can import an adapter class.
 
@@ -121,7 +194,7 @@ Business rules, such as resilience scoring, fairness measures, shortfall detecti
 - **The ports are a separate module, not part of `service`.** The adapters need the ports and the application needs the adapters, so ports inside `service` would create a circular dependency between Maven modules. Keeping them apart from `domain` also separates the data (`domain`) from the contracts (`port`).
 - **`domain` holds data only.** All behaviour lives in `service`, so the model stays simple to create, compare and pass between layers.
 - **All adapters are in one module, split into `adapter.inbound` and `adapter.outbound`.** The names avoid `in` and `out` because `in` is a reserved word in Java.
-- **Only `application` depends on Spring Boot.** `adapter` and `config` use plain Spring Framework libraries (`spring-webmvc`, `spring-context`), so they are ordinary libraries. The Spring Boot starters, which bring auto-configuration and the embedded Tomcat server, belong in `application` only. When a feature needs a new technology, add the plain library (e.g. `spring-data-jpa`) to the module that uses it, and the matching starter (e.g. `spring-boot-starter-data-jpa`) to `application`. This also stops IDE tools such as the Spring Boot Dashboard from listing `adapter` and `config` as runnable apps.
+- **Only `application` depends on Spring Boot.** `adapter` and `config` use plain Spring libraries (`spring-webmvc`, `spring-data-jpa`, `spring-context`), so they are ordinary libraries. The Spring Boot starters, which bring auto-configuration and the embedded Tomcat server, belong in `application` only. When a feature needs a new technology, add the plain library (e.g. `spring-data-jpa`) to the module that uses it, and the matching starter (e.g. `spring-boot-starter-data-jpa`) to `application`. This also stops IDE tools such as the Spring Boot Dashboard from listing `adapter` and `config` as runnable apps.
 - **Services have no Spring annotations.** `config` registers them as `@Bean`s, so the service code stays plain Java.
 - **The main class is in the root package `ie.tcd.resilientcity`,** even though it lives in the `application` module. Spring only scans the main class's package and the ones below it, so this lets it find `config.*` and `adapter.*` automatically.
 
@@ -174,7 +247,7 @@ Package: `ie.tcd.resilientcity.adapter`
 |---|---|
 | `adapter.inbound.web` | The REST/JSON API that the React UI calls through Firebase Hosting. It exposes the UI's requests (`submitGrowthRequest`, `submitScoringRequest`, `revisePlan`, `finalisePlan`, `submitReview`, …) and the run-status endpoint the UI polls. It also holds the backend part of the **Authenticator**, which checks the Firebase token and the user's role on every request. Controllers call input ports only, never outbound adapters directly |
 | `adapter.inbound.worker` *(planned)* | The run worker. It takes QUEUED runs from the run table and drives them through the Orchestrator |
-| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. The run table also serves as the job queue. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. The run table also serves as the job queue. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package. **Implemented so far:** saving and loading plans. The Flyway migrations are in this module too, under `src/main/resources/db/migration` |
 | `adapter.outbound.simulation` *(planned)* | The HTTP/JSON client for the Python Simulation Engine |
 
 ### `config`: Spring wiring
