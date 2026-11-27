@@ -17,7 +17,8 @@ In the overall system:
 | Language | Java 25 |
 | Build | Maven, multi-module |
 | Framework | Spring Boot 4.0 (the parent POM manages the versions of all Spring and test libraries and plugins) |
-| Tests | JUnit 5, AssertJ, Mockito |
+| Records | PostgreSQL + PostGIS, through Spring Data JPA and Hibernate Spatial (JTS geometries) |
+| Tests | JUnit 5, AssertJ, Mockito, Testcontainers (a real PostGIS database for the application tests) |
 
 Libraries are added when the feature that needs them is implemented, not in advance.
 
@@ -28,10 +29,79 @@ The coding standards for this project, which both developers and AI agents follo
 Run these commands from the `backend/` folder:
 
 ```bash
-mvn test                                  # build all modules and run the tests
+mvn test                                  # build all modules and run the tests (Docker must be running)
 mvn spring-boot:run -pl application -am   # start the backend on http://localhost:8080
 mvn package                               # runnable jar: application/target/application-0.0.1-SNAPSHOT.jar
 ```
+
+`mvn test` needs Docker because the application tests start a throwaway PostGIS container with Testcontainers. Starting the backend needs a PostGIS database; see [Records](#records-postgresql--postgis).
+
+## Records (PostgreSQL + PostGIS)
+
+Records are stored in PostgreSQL with the PostGIS extension, which adds map types such as points and polygons. For now there is only a basic setup that proves the technology works with our modules. No use case uses it yet.
+
+### What it does
+
+1. **On startup, Spring creates the tables and loads the starting data.** It runs `schema.sql` (enables PostGIS and creates the `district` table, whose `centre` column is a PostGIS point) and then `data.sql` (three Dublin districts, `D01` to `D03`). Both scripts are safe to run on every start: they use `IF NOT EXISTS` and `ON CONFLICT DO NOTHING`.
+2. **Hibernate checks the tables match the entities** (`spring.jpa.hibernate.ddl-auto=validate`). It never creates or changes tables itself; the SQL scripts own the schema.
+3. **A temporary startup check writes and reads.** `RecordsCheckConfig` saves a `startup-check` district through `DistrictRecordsPort`, reads it back, and logs every district. Saving replaces the same row, so restarts don't add rows. Remove it once a real use case uses Records.
+
+Where the code lives:
+
+| Part | Where |
+|---|---|
+| The district (ID, name, centre point) | `domain`: `District`, `DistrictId`, `Coordinates` |
+| "Save and load districts" | `port.out`: `DistrictRecordsPort`, implemented by `adapter.outbound.persistence.DistrictPersistenceAdapter` |
+| The `district` table | `adapter.outbound.persistence`: `DistrictEntity`, `DistrictJpaRepository` |
+| Table definitions and starting data | `adapter/src/main/resources/ie/tcd/resilientcity/adapter/outbound/persistence/` (`schema.sql`, `data.sql`) |
+| The temporary startup check | `config.RecordsCheckConfig` |
+| Database address and SQL script locations | `application.properties` (`spring.datasource.*`, `spring.sql.init.*`) |
+| Database failures | Rethrown as `domain.exception.RecordsAccessException` |
+
+The SQL scripts live in the persistence package, not in `application`, so that SQL doesn't leave `adapter.outbound.persistence`.
+
+### Check it on your computer
+
+You need JDK 25, Maven and Docker Desktop (running).
+
+1. **Run the tests.** Testcontainers starts and removes its own PostGIS container.
+   ```bash
+   mvn test
+   ```
+2. **Start PostGIS** in Docker. The user, password and database name match the local defaults in `application.properties`. If the name is already in use, run `docker start postgis-demo` instead.
+   ```bash
+   docker run -d --name postgis-demo -e POSTGRES_DB=resilientcity -e POSTGRES_USER=resilientcity -e POSTGRES_PASSWORD=resilientcity -p 5432:5432 postgis/postgis:17-3.5
+   ```
+3. **Build the modules, then start the backend.** RabbitMQ is optional here; without it the log shows connection errors for the run queue, but Records still works.
+   ```bash
+   mvn install -DskipTests
+   mvn spring-boot:run -pl application
+   ```
+4. **Look at the backend log.** You should see:
+   ```
+   Records check: saved District[districtId=DistrictId[value=startup-check], ...], read back Optional[District[...]]
+   Records check: 4 districts in Records: [District[districtId=DistrictId[value=D01], name=City Centre, ...], ...]
+   ```
+5. **Look at the table.** The centres are stored as PostGIS points with SRID 4326 (WGS 84):
+   ```bash
+   docker exec postgis-demo psql -U resilientcity -d resilientcity -c "SELECT id, name, ST_AsText(centre) FROM district ORDER BY id;"
+   ```
+6. **Clean up.** Press `Ctrl+C` in the backend window, then remove the container:
+   ```bash
+   docker rm -f postgis-demo
+   ```
+
+The user name and password in `application.properties` are for a local database only. Elsewhere, set the `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD` environment variables, which override them.
+
+If it doesn't work:
+
+| Problem | Likely cause |
+|---|---|
+| `Connection to localhost:5432 refused` | PostGIS isn't running yet, or is still starting. Wait a few seconds. |
+| `Port is already allocated` | Another database is using port 5432. Stop it, or map PostGIS to another port (`-p 5433:5432`) and set `SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5433/resilientcity`. |
+| `Schema validation: missing table [district]` | The SQL scripts didn't run. Check `spring.sql.init.mode=always` is set. |
+| `type "geometry" does not exist` | The database is plain PostgreSQL without PostGIS. Use the `postgis/postgis` image. |
+| Tests fail with `Could not find a valid Docker environment` | Docker Desktop isn't running. |
 
 ## Run queue (RabbitMQ)
 
@@ -166,9 +236,9 @@ Each layer is a separate Maven module, so a dependency that breaks the rule fail
 | `domain` | none | No | Import Spring, ports, adapters or anything else in the project |
 | `port` | `domain` | No | Import Spring, services or adapters |
 | `service` | `domain`, `port` | No | Import Spring or adapter classes |
-| `adapter` | `domain`, `port` | Spring Framework only (`spring-webmvc`) | Import services; it goes through ports instead |
+| `adapter` | `domain`, `port` | Spring Framework only (`spring-webmvc`, `spring-rabbit`, `spring-data-jpa`) | Import services; it goes through ports instead |
 | `config` | `domain`, `port`, `service` (plus `adapter` at **runtime** only) | Spring Framework only (`spring-context`) | Reference adapter classes; beans are wired against port interfaces |
-| `application` | `config` (plus `adapter` at **runtime** only) | Spring Boot (`spring-boot-starter-web`) | Not applicable; it only starts the app |
+| `application` | `config` (plus `adapter` at **runtime** only) | Spring Boot (`spring-boot-starter-web`, `-amqp`, `-data-jpa`) | Not applicable; it only starts the app |
 
 **Runtime scope:** `config` and `application` depend on `adapter` with `<scope>runtime</scope>`. The adapters are on the classpath when the app runs, so Spring finds and wires them, but they're absent at compile time, so no code there can import an adapter class.
 
@@ -241,7 +311,7 @@ Package: `ie.tcd.resilientcity.adapter`
 |---|---|
 | `adapter.inbound.web` | The REST/JSON API that the React UI calls through Firebase Hosting. It exposes the UI's requests (`submitGrowthRequest`, `submitScoringRequest`, `revisePlan`, `finalisePlan`, `submitReview`, …) and the run-status endpoint the UI polls. It also holds the backend part of the **Authenticator**, which checks the Firebase token and the user's role on every request. Controllers call input ports only, never outbound adapters directly |
 | `adapter.inbound.worker` | The run worker. It listens to the RabbitMQ `runs` queue, one job at a time (`prefetch=1`), turns each message into a `QueuedRun` and hands it to the `ExecuteRunUseCase` input port |
-| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package |
+| `adapter.outbound.persistence` | The **Records** component on PostgreSQL + PostGIS. It stores plans and plan versions, scenario inputs, runs with their inputs, seeds and results, map data saved by the UI, reviews, and the audit log. It converts between domain objects and storage models, and storage-specific types such as JPA entities must not leak outside this package. So far it holds only districts (`DistrictPersistenceAdapter`), and its table scripts are in the matching resources folder |
 | `adapter.outbound.messaging` | Puts runs on the RabbitMQ `runs` queue. `RabbitRunQueueAdapter` implements `RunQueuePort` and sends a JSON `RunMessage` (run ID, scenario ID, seed) |
 | `adapter.outbound.simulation` *(planned)* | The HTTP/JSON client for the Python Simulation Engine |
 
@@ -249,7 +319,7 @@ Package: `ie.tcd.resilientcity.adapter`
 
 Package: `ie.tcd.resilientcity.config`
 
-`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings. `RabbitConfig` declares the durable `runs` queue and the JSON message converter.
+`@Configuration` classes that register the plain-Java services as Spring beans. Each service's dependencies are declared as output-port interfaces, and Spring injects the matching adapter at runtime. This is also where cross-cutting setup goes, such as the security and role rules for the Authenticator, CORS and JSON settings. `RabbitConfig` declares the durable `runs` queue and the JSON message converter. `RecordsCheckConfig` is a temporary startup check that writes and reads a district in Records.
 
 ### `application`: entry point
 
