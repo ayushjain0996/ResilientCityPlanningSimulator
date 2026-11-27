@@ -1,33 +1,31 @@
+"""Solara user interface for the city simulation."""
+
 import osmnx as ox
 import solara
 
 from matplotlib.figure import Figure
-
 from mesa.visualization import SolaraViz
 from mesa.visualization.utils import update_counter
 
-from model import CityModel
+from simulation.city_model import CityModel
 
 
 model = CityModel(
     map_file="new_delhi_drive.graphml",
-    num_agents=20
+    num_agents=20,
 )
 
 
 @solara.component
 def CityMap(model):
-
-    # Tell Solara to re-render this component
-    # whenever the Mesa model advances.
+    """Render the road network and current vehicle positions."""
+    # Tell Solara to re-render this component whenever the Mesa model advances.
     update_counter.get()
 
-    # Use Matplotlib's object-oriented API
-    # for thread-safe rendering.
+    # Use Matplotlib's object-oriented API for thread-safe rendering.
     fig = Figure(figsize=(12, 10))
     ax = fig.subplots()
 
-    # Draw road network
     ox.plot_graph(
         model.road_network.graph,
         ax=ax,
@@ -39,11 +37,8 @@ def CityMap(model):
 
     graph = model.road_network.graph
 
-    # Draw vehicles
     for vehicle in model.vehicles:
-
         node = graph.nodes[vehicle.current_node]
-
         ax.scatter(
             node["x"],
             node["y"],
@@ -52,12 +47,9 @@ def CityMap(model):
         )
 
     ax.set_title(
-        f"New Delhi Simulation — "
-        f"{len(model.vehicles)} vehicles"
+        f"New Delhi Simulation — {len(model.vehicles)} vehicles"
     )
-
     ax.set_axis_off()
-
     solara.FigureMatplotlib(fig)
 
 
@@ -66,5 +58,3 @@ page = SolaraViz(
     components=[CityMap],
     name="New Delhi City Simulation",
 )
-
-page
