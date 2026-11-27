@@ -9,6 +9,7 @@ import ie.tcd.resilientcity.domain.plan.PlanId;
 import ie.tcd.resilientcity.port.out.LoadPlanPort;
 import ie.tcd.resilientcity.port.out.SavePlanPort;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionException;
 
@@ -20,6 +21,8 @@ import org.springframework.transaction.TransactionException;
  */
 @Component
 public class PlanPersistenceAdapter implements SavePlanPort, LoadPlanPort {
+
+    private static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
 
     private final PlanJpaRepository planJpaRepository;
 
@@ -48,7 +51,7 @@ public class PlanPersistenceAdapter implements SavePlanPort, LoadPlanPort {
     }
 
     /**
-     * Loads every plan in the plans table.
+     * Loads every plan in the plans table, oldest first. Plans created at the same time are ordered by ID.
      *
      * @return the stored plans, or an empty list if there are none, never {@code null}
      * @throws RecordsUnavailableException if the database cannot be read
@@ -56,7 +59,7 @@ public class PlanPersistenceAdapter implements SavePlanPort, LoadPlanPort {
     @Override
     public List<Plan> loadAllPlans() {
         try {
-            return planJpaRepository.findAll().stream()
+            return planJpaRepository.findAll(OLDEST_FIRST).stream()
                     .map(PlanPersistenceAdapter::toPlan)
                     .toList();
         } catch (DataAccessException | TransactionException exception) {

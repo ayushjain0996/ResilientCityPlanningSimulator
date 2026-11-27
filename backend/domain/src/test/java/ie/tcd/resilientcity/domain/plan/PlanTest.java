@@ -57,6 +57,28 @@ class PlanTest {
     }
 
     @Test
+    void leavesRejectedNameOutOfTheMessage() {
+        String name = "<script>" + "a".repeat(Plan.MAX_NAME_LENGTH);
+
+        assertThatThrownBy(() -> new Plan(PLAN_ID, name, CREATED_AT))
+                .isInstanceOf(InvalidPlanNameException.class)
+                .hasMessageNotContaining("<script>")
+                .hasMessageContaining((Plan.MAX_NAME_LENGTH + 8) + " characters long");
+    }
+
+    @Test
+    void reportsMissingName() {
+        assertThatThrownBy(() -> new Plan(PLAN_ID, null, CREATED_AT))
+                .hasMessageEndingWith("but it was missing");
+    }
+
+    @Test
+    void reportsBlankName() {
+        assertThatThrownBy(() -> new Plan(PLAN_ID, " ", CREATED_AT))
+                .hasMessageEndingWith("but it was blank");
+    }
+
+    @Test
     void rejectsNameLongerThanMaximumLength() {
         String name = "a".repeat(Plan.MAX_NAME_LENGTH + 1);
 

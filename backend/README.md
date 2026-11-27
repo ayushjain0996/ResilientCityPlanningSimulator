@@ -32,11 +32,13 @@ You need Java 25, Maven and Docker. Docker must be running for the tests, which 
 Run these commands from the `backend/` folder:
 
 ```bash
-mvn test                                  # build all modules and run the tests
-docker compose up -d --wait               # start the local database
-mvn spring-boot:run -pl application -am   # start the backend on http://localhost:8080
-mvn package                               # runnable jar: application/target/application-0.0.1-SNAPSHOT.jar
+mvn test                                                      # build all modules and run the tests
+docker compose up -d --wait                                   # start the local database
+mvn package -DskipTests                                       # build the runnable jar, skipping the tests
+java -jar application/target/application-0.0.1-SNAPSHOT.jar  # start the backend on http://localhost:8080
 ```
+
+Rebuild the jar with `mvn package -DskipTests` after every code change. Don't use `mvn spring-boot:run -pl application -am`: with `-am`, Maven also tries to run the parent project, which has no main class, so it stops with "Unable to find a suitable main class".
 
 ## Local database
 
@@ -85,10 +87,10 @@ Flyway creates the tables and the starting data. The migrations are SQL files in
 | Request | Result |
 |---|---|
 | `POST /api/plans` | Creates a plan. `201 Created`, with its address in the `Location` header |
-| `GET /api/plans` | Returns every plan |
+| `GET /api/plans` | Returns every plan, oldest first |
 | `GET /api/plans/{planId}` | Returns one plan |
 
-Errors are Problem Details: `400` for an invalid plan name, plan ID or request body, `404` for a plan that doesn't exist, and `503` when the database can't be reached.
+Errors are Problem Details: `400` for an invalid plan name, plan ID or request body, `404` for a plan that doesn't exist, and `503` when the database can't be reached (after up to 5 seconds of trying to connect).
 
 With the backend running, in a POSIX shell (macOS, Linux, Git Bash or WSL):
 

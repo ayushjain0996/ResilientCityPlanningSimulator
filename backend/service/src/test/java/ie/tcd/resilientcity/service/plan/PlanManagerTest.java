@@ -37,6 +37,17 @@ class PlanManagerTest {
     }
 
     @Test
+    void roundsCreationTimeToMicroseconds() {
+        Instant nanosecondTime = Instant.parse("2026-01-01T12:00:00.123456789Z");
+        PlanManager nanosecondPlanManager =
+                new PlanManager(records, records, Clock.fixed(nanosecondTime, ZoneOffset.UTC));
+
+        Plan created = nanosecondPlanManager.createPlan("Plan");
+
+        assertThat(created.createdAt()).isEqualTo(Instant.parse("2026-01-01T12:00:00.123456Z"));
+    }
+
+    @Test
     void savesTheCreatedPlan() {
         Plan created = planManager.createPlan("Dublin Docklands baseline");
 

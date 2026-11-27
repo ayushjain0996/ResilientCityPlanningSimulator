@@ -38,8 +38,9 @@ Backend (Java 25, Maven, Docker running), from `backend/`:
 
 ```bash
 mvn test
-docker compose up -d --wait               # PostgreSQL + PostGIS on localhost:5432
-mvn spring-boot:run -pl application -am   # http://localhost:8080
+docker compose up -d --wait                                  # PostgreSQL + PostGIS on localhost:5432
+mvn package -DskipTests                                      # build the runnable jar
+java -jar application/target/application-0.0.1-SNAPSHOT.jar  # http://localhost:8080
 ```
 
 Frontend (Node 22, see `frontend/.nvmrc`), from `frontend/`:

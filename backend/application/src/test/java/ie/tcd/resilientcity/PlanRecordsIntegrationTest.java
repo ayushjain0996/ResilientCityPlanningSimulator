@@ -1,14 +1,12 @@
 package ie.tcd.resilientcity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.within;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import com.jayway.jsonpath.JsonPath;
@@ -65,9 +63,7 @@ class PlanRecordsIntegrationTest {
 
         assertThat(textAt(loadedBody, "$.id")).isEqualTo(textAt(createdBody, "$.id"));
         assertThat(textAt(loadedBody, "$.name")).isEqualTo("Integration test plan");
-        // PostgreSQL rounds timestamps to microseconds, and some system clocks are more precise than that.
-        assertThat(Instant.parse(textAt(loadedBody, "$.createdAt")))
-                .isCloseTo(Instant.parse(textAt(createdBody, "$.createdAt")), within(1, ChronoUnit.MICROS));
+        assertThat(textAt(loadedBody, "$.createdAt")).isEqualTo(textAt(createdBody, "$.createdAt"));
     }
 
     @Test
@@ -80,6 +76,18 @@ class PlanRecordsIntegrationTest {
 
         List<String> ids = JsonPath.read(body, "$[*].id");
         assertThat(ids).contains(id);
+    }
+
+    @Test
+    void listsPlansOldestFirst() throws Exception {
+        createPlan("Newest test plan");
+
+        String body = mockMvc.perform(get("/api/plans"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        List<String> createdAt = JsonPath.read(body, "$[*].createdAt");
+        assertThat(createdAt.stream().map(Instant::parse).toList()).isSorted();
     }
 
     @Test

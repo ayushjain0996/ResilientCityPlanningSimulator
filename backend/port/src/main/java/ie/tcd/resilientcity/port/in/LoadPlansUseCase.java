@@ -13,7 +13,7 @@ import ie.tcd.resilientcity.domain.plan.PlanId;
 public interface LoadPlansUseCase {
 
     /**
-     * Loads every stored plan.
+     * Loads every stored plan, oldest first. Plans created at the same time are ordered by ID.
      *
      * @return the stored plans, or an empty list if there are none, never {@code null}
      * @throws RecordsUnavailableException if Records cannot be read

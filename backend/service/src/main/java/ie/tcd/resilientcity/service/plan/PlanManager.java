@@ -2,6 +2,7 @@ package ie.tcd.resilientcity.service.plan;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -39,7 +40,8 @@ public final class PlanManager implements CreatePlanUseCase, LoadPlansUseCase {
 
     /**
      * Creates a plan with a new random ID and the current time, and stores it in Records. Nothing is stored if
-     * the name is invalid.
+     * the name is invalid. The time is rounded down to microseconds, the precision Records keeps, so the returned
+     * plan matches the stored one on every system clock.
      *
      * @param name the plan's name, not blank and at most {@link Plan#MAX_NAME_LENGTH} characters
      * @return the stored plan, never {@code null}
@@ -48,13 +50,14 @@ public final class PlanManager implements CreatePlanUseCase, LoadPlansUseCase {
      */
     @Override
     public Plan createPlan(String name) {
-        Plan plan = new Plan(new PlanId(UUID.randomUUID()), name, Instant.now(clock));
+        Instant createdAt = Instant.now(clock).truncatedTo(ChronoUnit.MICROS);
+        Plan plan = new Plan(new PlanId(UUID.randomUUID()), name, createdAt);
         savePlanPort.savePlan(plan);
         return plan;
     }
 
     /**
-     * Loads every plan stored in Records.
+     * Loads every plan stored in Records, oldest first. Plans created at the same time are ordered by ID.
      *
      * @return the stored plans, or an empty list if there are none, never {@code null}
      * @throws RecordsUnavailableException if Records cannot be read

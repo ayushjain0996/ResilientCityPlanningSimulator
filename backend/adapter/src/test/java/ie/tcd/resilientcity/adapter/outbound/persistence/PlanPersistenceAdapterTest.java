@@ -24,6 +24,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.data.domain.Sort;
 import org.springframework.transaction.CannotCreateTransactionException;
 
 @ExtendWith(MockitoExtension.class)
@@ -33,6 +34,7 @@ class PlanPersistenceAdapterTest {
     private static final String NAME = "Dublin Docklands baseline";
     private static final Instant CREATED_AT = Instant.parse("2026-01-01T12:00:00Z");
     private static final Plan PLAN = new Plan(new PlanId(ID), NAME, CREATED_AT);
+    private static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
 
     @Mock
     private PlanJpaRepository planJpaRepository;
@@ -53,14 +55,26 @@ class PlanPersistenceAdapterTest {
 
     @Test
     void loadsAllEntitiesAsPlans() {
-        when(planJpaRepository.findAll()).thenReturn(List.of(new PlanEntity(ID, NAME, CREATED_AT)));
+        when(planJpaRepository.findAll(OLDEST_FIRST)).thenReturn(List.of(new PlanEntity(ID, NAME, CREATED_AT)));
 
         assertThat(planPersistenceAdapter.loadAllPlans()).containsExactly(PLAN);
     }
 
     @Test
+    void keepsTheRepositoryOrderOfOldestFirst() {
+        UUID laterId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+        Instant later = CREATED_AT.plusSeconds(60);
+        when(planJpaRepository.findAll(OLDEST_FIRST)).thenReturn(List.of(
+                new PlanEntity(ID, NAME, CREATED_AT),
+                new PlanEntity(laterId, "Later", later)));
+
+        assertThat(planPersistenceAdapter.loadAllPlans())
+                .containsExactly(PLAN, new Plan(new PlanId(laterId), "Later", later));
+    }
+
+    @Test
     void loadsNoPlansWhenThereAreNoEntities() {
-        when(planJpaRepository.findAll()).thenReturn(List.of());
+        when(planJpaRepository.findAll(OLDEST_FIRST)).thenReturn(List.of());
 
         assertThat(planPersistenceAdapter.loadAllPlans()).isEmpty();
     }
@@ -92,7 +106,7 @@ class PlanPersistenceAdapterTest {
     @ParameterizedTest
     @MethodSource("databaseFailures")
     void reportsRecordsUnavailableWhenLoadingAllPlansFails(RuntimeException failure) {
-        when(planJpaRepository.findAll()).thenThrow(failure);
+        when(planJpaRepository.findAll(OLDEST_FIRST)).thenThrow(failure);
 
         assertThatThrownBy(() -> planPersistenceAdapter.loadAllPlans())
                 .isInstanceOf(RecordsUnavailableException.class)
