@@ -1,11 +1,19 @@
 """Solara user interface for the city simulation."""
 
+import sys
+from pathlib import Path
+
 import osmnx as ox
 import solara
 
 from matplotlib.figure import Figure
 from mesa.visualization import SolaraViz
 from mesa.visualization.utils import update_counter
+
+# Add the simulationEngine root to Python's import path.
+BASE_DIR = Path(__file__).resolve().parents[1]
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
 from simulation.city_model import CityModel
 
