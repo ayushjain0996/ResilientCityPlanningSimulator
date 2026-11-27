@@ -13,6 +13,11 @@ coverage/
 .env*
 !.env.example
 
+# Service-account keys must never be committed
+*serviceAccount*.json
+*service-account*.json
+*firebase-adminsdk*.json
+
 # IDE
 .idea/
 *.iml
