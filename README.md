@@ -34,7 +34,7 @@ React UI ──/api──▶ Backend ──HTTP/JSON──▶ Python Simulation 
 
 ## Quick start
 
-Backend (Java 25, Maven), from `backend/`:
+Backend (Java 25, Maven, Docker running for the database tests), from `backend/`:
 
 ```bash
 mvn test
