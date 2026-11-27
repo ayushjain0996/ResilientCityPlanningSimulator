@@ -33,6 +33,23 @@ mvn spring-boot:run -pl application -am   # start the backend on http://localhos
 mvn package                               # runnable jar: application/target/application-0.0.1-SNAPSHOT.jar
 ```
 
+### Environment variables
+
+| Variable | Needed | Meaning |
+|---|---|---|
+| `FIREBASE_PROJECT_ID` | To run the app (the tests set their own) | The Firebase project that issues the ID tokens. The backend accepts only tokens whose issuer is `https://securetoken.google.com/<id>` and whose audience is `<id>` |
+| `CORS_ALLOWED_ORIGINS` | No | Comma-separated browser origins allowed to call `/api`. Defaults to `http://localhost:5173`. Not needed when the UI and the API share one origin (Vite proxy, Firebase Hosting) |
+
+For example, in PowerShell: `$env:FIREBASE_PROJECT_ID = "resilient-city-planning"`, then `java -jar application/target/application-0.0.1-SNAPSHOT.jar`.
+
+### Authentication
+
+Every request must carry `Authorization: Bearer <Firebase ID token>`, except `GET /api/health`, which is public on purpose. Spring Security's OAuth2 resource server verifies the token itself (signature, issuer, audience and expiry), using Google's public keys, which it fetches on first use, so the backend needs internet access to Google.
+
+The user's role comes from the custom claim `role` (`PLANNER`, `EMERGENCY_SERVICES_MANAGER` or `AUDITOR`), which is set only on a trusted machine with the Firebase Admin SDK. It becomes the authority `ROLE_<role>`, so a method can use `@PreAuthorize("hasRole('PLANNER')")`. `GET /api/me` returns the caller's `uid`, `email` and `role` from the token.
+
+The rules live in `SecurityConfig` (module `config`), and `MeController` is in `adapter.inbound.web`. The `uid` from the token is what later features should record as "who" for the audit log.
+
 ## Run queue (RabbitMQ)
 
 Simulation runs are handed from the backend to the worker through a RabbitMQ queue called `runs`. This section explains what happens and how to check it on your own computer.
