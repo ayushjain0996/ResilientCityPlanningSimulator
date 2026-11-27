@@ -1,0 +1,15 @@
+{
+  "name": "set-role",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Assigns a role to a Firebase user, as a custom claim",
+  "scripts": {
+    "set-role": "node set-role.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "firebase-admin": "14.5.0"
+  }
+}

@@ -9,6 +9,7 @@ The Resilient City Planning Simulator, built by CS7CS3 Group 11. This repository
 | `backend/` | Spring Boot modular monolith (Java 25, Maven multi-module, hexagonal architecture) | [backend/README.md](backend/README.md) |
 | `frontend/` | React UI (Vite + TypeScript + npm), served by Firebase Hosting | [frontend/README.md](frontend/README.md) |
 | `simulation-engine/` *(planned)* | Python Simulation Engine (Mesa + FastAPI) | Added when the engine is started |
+| `tools/set-role/` | Small script that assigns a user's role (a Firebase custom claim) | [tools/set-role/README.md](tools/set-role/README.md) |
 | `docs/` | Coding standards, review instructions and the pull request template | See below |
 
 ## Contributing
